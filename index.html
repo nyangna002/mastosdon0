@@ -63,10 +63,22 @@
             const seenContents = new Set(); // 본문 내용 중복 체크
             const seenIds = new Set();      // ID 중복 체크
 
-            data.orderedItems.forEach(item => {
-                // 오직 Create 활동만
-                if (item.type === 'Create' && item.object && typeof item.object === 'object') {
-                    const obj = item.object;
+         data.orderedItems.forEach(item => {
+    if (item.type === 'Create' && item.object && typeof item.object === 'object') {
+        const obj = item.object;
+
+        // --- [추가] DM 제외 로직 ---
+        // visibility가 'direct'인 경우 DM이므로 건너뜁니다.
+        if (obj.visibility === 'direct') return; 
+        // -----------------------
+
+        const tootId = obj.id;
+        if (processedIds.has(tootId)) return; 
+        processedIds.add(tootId);
+
+        // ... 나머지 글자 수 및 멘션 체크 로직 ...
+    }
+});
                     const content = obj.content || "";
                     
                     // 1. ID 중복 제거
