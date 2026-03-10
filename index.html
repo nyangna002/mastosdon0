@@ -8,22 +8,30 @@
         body { font-family: 'Pretendard', sans-serif; background-color: #f4f7f9; color: #333; line-height: 1.6; max-width: 700px; margin: 50px auto; padding: 20px; }
         .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         h1 { font-size: 1.5rem; margin-bottom: 20px; color: #2d3748; text-align: center; }
-        .field { margin-bottom: 20px; }
+        .field { margin-bottom: 25px; padding-bottom: 10px; border-bottom: 1px solid #edf2f7; }
         label { display: block; font-weight: bold; margin-bottom: 8px; font-size: 0.95rem; }
         input[type="text"], input[type="number"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box; }
-        .checkbox-group { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        
+        /* 다중 입력 스타일 */
+        .exclude-item { display: flex; gap: 8px; margin-bottom: 8px; }
+        .btn-add { background-color: #48bb78; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; margin-bottom: 10px; }
+        .btn-remove { background-color: #f56565; color: white; border: none; padding: 0 12px; border-radius: 6px; cursor: pointer; }
+        
+        .checkbox-group { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: bold; }
         .checkbox-group input { width: 18px; height: 18px; }
-        button { width: 100%; padding: 12px; background-color: #5a67d8; color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
-        button:hover { background-color: #4c51bf; }
-        #result { margin-top: 30px; padding: 20px; border-radius: 8px; background-color: #edf2f7; text-align: center; display: none; }
-        .count-num { font-size: 2rem; color: #5a67d8; font-weight: bold; }
+        
+        button#calc-btn { width: 100%; padding: 15px; background-color: #5a67d8; color: white; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
+        button#calc-btn:hover { background-color: #4c51bf; }
+        
+        #result { margin-top: 30px; padding: 20px; border-radius: 12px; background-color: #edf2f7; text-align: center; display: none; border: 2px solid #5a67d8; }
+        .count-num { font-size: 2.5rem; color: #5a67d8; font-weight: 900; }
         .info-text { font-size: 0.85rem; color: #718096; margin-top: 5px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1> 아이디 미포함 마스토돈 툿수 계산기</h1>
+    <h1>마스토돈 아이디 미포함 글자수 툿수 계산기 </h1>
 
     <div class="field">
         <label for="minLength">최소 글자 수 설정 (n자 이상)</label>
@@ -34,8 +42,13 @@
         <label class="checkbox-group">
             <input type="checkbox" id="useExcludeUser"> 특정 사용자(봇 등) 언급 시 제외
         </label>
-        <input type="text" id="excludeUrl" placeholder="예: https://planet.moe/@" style="margin-top:10px;">
-        <p class="info-text">* 해당 사용자가 멘션에 포함된 툿은 계산에서 빠집니다.</p>
+        <div id="excludeList" style="margin-top:10px;">
+            <div class="exclude-item">
+                <input type="text" class="excludeUrl" placeholder="예: https://planet.moe/@">
+            </div>
+        </div>
+        <button class="btn-add" onclick="addExcludeField()">+ 인원 추가</button>
+        <p class="info-text">* 위 목록 중 한 명이라도 포함된 툿은 제외됩니다.</p>
     </div>
 
     <div class="field">
@@ -50,22 +63,38 @@
         <input type="file" id="fileInput" accept=".json">
     </div>
 
-    <button onclick="calculateToots()">툿수 계산하기</button>
+    <button id="calc-btn" onclick="calculateToots()">툿수 계산하기</button>
 
     <div id="result">
-        <div id="resultText">조건에 맞는 툿 수</div>
+        <div id="resultText" style="font-weight: bold;">분석된 툿 개수</div>
         <div class="count-num" id="finalCount">0</div>
     </div>
 </div>
 
 <script>
+    // 입력 칸 추가 함수
+    function addExcludeField() {
+        const container = document.getElementById('excludeList');
+        const div = document.createElement('div');
+        div.className = 'exclude-item';
+        div.innerHTML = `
+            <input type="text" class="excludeUrl" placeholder="https://주소...">
+            <button class="btn-remove" onclick="this.parentElement.remove()">✕</button>
+        `;
+        container.appendChild(div);
+    }
+
     function calculateToots() {
         const fileInput = document.getElementById('fileInput');
         const minLength = parseInt(document.getElementById('minLength').value) || 0;
-        const excludeUrl = document.getElementById('excludeUrl').value.trim();
         const useExcludeUser = document.getElementById('useExcludeUser').checked;
         const excludeNormalToots = document.getElementById('excludeNormalToots').checked;
         
+        // 제외할 URL 리스트 수집
+        const excludeUrls = Array.from(document.querySelectorAll('.excludeUrl'))
+                                .map(input => input.value.trim())
+                                .filter(val => val !== "");
+
         const resultDiv = document.getElementById('result');
         const finalCountSpan = document.getElementById('finalCount');
 
@@ -80,36 +109,28 @@
                 const data = JSON.parse(e.target.result);
                 let count = 0;
 
-                if (!data.orderedItems) {
-                    alert("올바른 마스토돈 아카이브 형식이 아닙니다.");
-                    return;
-                }
-
                 data.orderedItems.forEach(item => {
                     if (item.type === 'Create' && item.object && item.object.type === 'Note') {
                         const obj = item.object;
                         const content = obj.content || "";
                         const tags = obj.tag || [];
                         
-                        // 1. 멘션 여부 확인
                         const mentions = tags.filter(t => t.type === 'Mention');
                         const isMention = mentions.length > 0;
 
-                        // [조건] 일반 툿 제외 여부
+                        // [조건 1] 일반 툿 제외
                         if (excludeNormalToots && !isMention) return;
 
-                        // [조건] 특정 사용자 포함 시 제외
-                        if (useExcludeUser && excludeUrl) {
-                            const hasExcluded = mentions.some(m => m.href === excludeUrl) || content.includes(excludeUrl);
+                        // [조건 2] 다중 특정 사용자 제외
+                        if (useExcludeUser && excludeUrls.length > 0) {
+                            const hasExcluded = mentions.some(m => excludeUrls.includes(m.href)) || 
+                                              excludeUrls.some(url => content.includes(url));
                             if (hasExcluded) return;
                         }
 
-                        // [계산] 아이디 제외 순수 본문 글자수 측정
-                        // <span class="h-card"> 태그(멘션 아이디 덩어리) 먼저 제거
+                        // [계산] 순수 본문 글자수 측정 (멘션 아이디 제외)
                         let pureContent = content.replace(/<span class="h-card">.*?<\/span>/g, '');
-                        // 남은 HTML 태그 제거
                         let cleanText = pureContent.replace(/<[^>]+?>/g, '').trim();
-                        // 본문 내 남은 @아이디 패턴 강제 제거
                         cleanText = cleanText.replace(/@[a-zA-Z0-9_@.]+/g, '').trim();
 
                         if (cleanText.length >= minLength) {
@@ -122,8 +143,7 @@
                 finalCountSpan.innerText = count.toLocaleString() + " 개";
 
             } catch (err) {
-                alert("파일 읽기 중 오류가 발생했습니다.");
-                console.error(err);
+                alert("파일 읽기 오류: " + err.message);
             }
         };
         reader.readAsText(fileInput.files[0]);
