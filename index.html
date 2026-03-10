@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마스토돈 툿수 계산기</title>
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f4f7f9; color: #333; line-height: 1.6; max-width: 700px; margin: 50px auto; padding: 20px; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { font-size: 1.5rem; margin-bottom: 20px; color: #2d3748; text-align: center; }
+        .field { margin-bottom: 20px; }
+        label { display: block; font-weight: bold; margin-bottom: 8px; font-size: 0.95rem; }
+        input[type="text"], input[type="number"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box; }
+        .checkbox-group { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .checkbox-group input { width: 18px; height: 18px; }
+        button { width: 100%; padding: 12px; background-color: #5a67d8; color: white; border: none; border-radius: 6px; font-size: 1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; }
+        button:hover { background-color: #4c51bf; }
+        #result { margin-top: 30px; padding: 20px; border-radius: 8px; background-color: #edf2f7; text-align: center; display: none; }
+        .count-num { font-size: 2rem; color: #5a67d8; font-weight: bold; }
+        .info-text { font-size: 0.85rem; color: #718096; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1> 툿수 계산기 (Archive)</h1>
+
+    <div class="field">
+        <label for="minLength">최소 글자 수 설정 (n자 이상)</label>
+        <input type="number" id="minLength" value="30" min="0">
+    </div>
+
+    <div class="field">
+        <label class="checkbox-group">
+            <input type="checkbox" id="useExcludeUser"> 특정 사용자(봇 등) 언급 시 제외
+        </label>
+        <input type="text" id="excludeUrl" placeholder="예: https://planet.moe/@COSMIC_BOT" style="margin-top:10px;">
+        <p class="info-text">* 해당 사용자가 멘션에 포함된 툿은 계산에서 빠집니다.</p>
+    </div>
+
+    <div class="field">
+        <label class="checkbox-group">
+            <input type="checkbox" id="excludeNormalToots"> 멘션 없는 '일반 툿'은 제외
+        </label>
+        <p class="info-text">* 체크 시, 누군가를 태그(@)한 툿만 계산합니다.</p>
+    </div>
+
+    <div class="field">
+        <label for="fileInput">outbox.json 파일 선택</label>
+        <input type="file" id="fileInput" accept=".json">
+    </div>
+
+    <button onclick="calculateToots()">툿수 계산하기</button>
+
+    <div id="result">
+        <div id="resultText">조건에 맞는 툿 수</div>
+        <div class="count-num" id="finalCount">0</div>
+    </div>
+</div>
+
+<script>
+    function calculateToots() {
+        const fileInput = document.getElementById('fileInput');
+        const minLength = parseInt(document.getElementById('minLength').value) || 0;
+        const excludeUrl = document.getElementById('excludeUrl').value.trim();
+        const useExcludeUser = document.getElementById('useExcludeUser').checked;
+        const excludeNormalToots = document.getElementById('excludeNormalToots').checked;
+        
+        const resultDiv = document.getElementById('result');
+        const finalCountSpan = document.getElementById('finalCount');
+
+        if (!fileInput.files[0]) {
+            alert("파일을 선택해 주세요!");
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                let count = 0;
+
+                if (!data.orderedItems) {
+                    alert("올바른 마스토돈 아카이브 형식이 아닙니다.");
+                    return;
+                }
+
+                data.orderedItems.forEach(item => {
+                    if (item.type === 'Create' && item.object && item.object.type === 'Note') {
+                        const obj = item.object;
+                        const content = obj.content || "";
+                        const tags = obj.tag || [];
+                        
+                        // 1. 멘션 여부 확인
+                        const mentions = tags.filter(t => t.type === 'Mention');
+                        const isMention = mentions.length > 0;
+
+                        // [조건] 일반 툿 제외 여부
+                        if (excludeNormalToots && !isMention) return;
+
+                        // [조건] 특정 사용자 포함 시 제외
+                        if (useExcludeUser && excludeUrl) {
+                            const hasExcluded = mentions.some(m => m.href === excludeUrl) || content.includes(excludeUrl);
+                            if (hasExcluded) return;
+                        }
+
+                        // [계산] 아이디 제외 순수 본문 글자수 측정
+                        // <span class="h-card"> 태그(멘션 아이디 덩어리) 먼저 제거
+                        let pureContent = content.replace(/<span class="h-card">.*?<\/span>/g, '');
+                        // 남은 HTML 태그 제거
+                        let cleanText = pureContent.replace(/<[^>]+?>/g, '').trim();
+                        // 본문 내 남은 @아이디 패턴 강제 제거
+                        cleanText = cleanText.replace(/@[a-zA-Z0-9_@.]+/g, '').trim();
+
+                        if (cleanText.length >= minLength) {
+                            count++;
+                        }
+                    }
+                });
+
+                resultDiv.style.display = 'block';
+                finalCountSpan.innerText = count.toLocaleString() + " 개";
+
+            } catch (err) {
+                alert("파일 읽기 중 오류가 발생했습니다.");
+                console.error(err);
+            }
+        };
+        reader.readAsText(fileInput.files[0]);
+    }
+</script>
+
+</body>
+</html>
