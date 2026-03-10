@@ -45,7 +45,7 @@
 
     <div class="setting-item">
         <label class="checkbox-group"><input type="checkbox" id="excludeNormal"> 멘션 없는 일반 툿 제외</label>
-        <label class="checkbox-group" style="margin-top:10px;"><input type="checkbox" id="excludeDM" checked> <strong>DM(다이렉트 메시지) 제외</strong></label>
+        <label class="checkbox-group" style="margin-top:10px;"><input type="checkbox" id="excludeDM" checked> <strong>DM(개인 멘션/Direct) 제외</strong></label>
     </div>
 
     <div class="setting-item">
@@ -90,58 +90,52 @@
                 const processedIds = new Set();
                 const processedContents = new Set();
 
-data.orderedItems.forEach(item => {
-    // 1. 본인이 생성(Create)한 노트(Note)만 필터링
-    if (item.type === 'Create' && item.object && typeof item.object === 'object') {
-        const obj = item.object;
+                if (!data.orderedItems) throw new Error("outbox.json 형식이 올바르지 않습니다.");
 
-        // --- [핵심] 개인 멘션(DM) 제외 로직 ---
-        // 마스토돈의 DM은 visibility가 'direct'입니다. 
-        // 이 한 줄이 827개에서 개인 대화를 싹 걷어내 줄 거예요.
-        if (obj.visibility === 'direct') return; 
-        // ------------------------------------
+                data.orderedItems.forEach(item => {
+                    if (item.type === 'Create' && item.object && typeof item.object === 'object') {
+                        const obj = item.object;
 
-        // 중복 ID 방지
-        const tootId = obj.id;
-        if (processedIds.has(tootId)) return; 
-        processedIds.add(tootId);
+                        // 1. 중복 ID 방지
+                        if (processedIds.has(obj.id)) return;
+                        processedIds.add(obj.id);
 
-        const content = obj.content || "";
-        const tags = obj.tag || [];
-        const mentions = tags.filter(t => t.type === 'Mention');
-        const isMention = mentions.length > 0;
+                        // 2. DM(개인 멘션) 제외 로직 (visibility가 direct이면 무조건 제외)
+                        if (excludeDM && obj.visibility === 'direct') return;
 
-        // [옵션] 일반 툿(멘션 없는 글) 제외
-        if (excludeNormal && !isMention) return;
+                        const content = obj.content || "";
+                        const tags = obj.tag || [];
+                        const mentions = tags.filter(t => t.type === 'Mention');
+                        const isMention = mentions.length > 0;
 
-        // [옵션] 특정 사용자 제외 (COSMIC_BOT 등)
-        if (useExcludeUser && excludeUrls.length > 0) {
-            const hasExcluded = mentions.some(m => excludeUrls.includes(m.href)) || 
-                              excludeUrls.some(url => content.includes(url));
-            if (hasExcluded) return;
-        }
+                        // 3. 일반 툿(멘션 없음) 필터
+                        if (excludeNormal && !isMention) return;
 
-        // [글자수 계산] 아이디 제외 순수 본문
-        let text = content.replace(/<span class="h-card">.*?<\/span>/g, '');
-        text = text.replace(/<[^>]+?>/g, '');
-        text = text.replace(/&[a-z0-9]+;/gi, ' ');
-        text = text.replace(/https?:\/\/[^\s]+/g, '');
-        text = text.replace(/@[a-zA-Z0-9_@.]+/g, '').trim();
+                        // 4. 특정 사용자 필터
+                        if (useExcludeUser && excludeUrls.length > 0) {
+                            const hasExcluded = mentions.some(m => excludeUrls.includes(m.href)) || 
+                                              excludeUrls.some(url => content.includes(url));
+                            if (hasExcluded) return;
+                        }
 
-        // 수정본 중복 방지 (텍스트 내용 기준)
-        const strictText = text.replace(/\s+/g, '');
-        if (strictText.length < minLength || processedContents.has(strictText)) return;
-        processedContents.add(strictText);
+                        // 5. 글자수 계산 (아이디/태그 제외)
+                        let cleanText = content.replace(/<span class="h-card">.*?<\/span>/g, '');
+                        cleanText = cleanText.replace(/<[^>]+?>/g, '');
+                        cleanText = cleanText.replace(/&[a-z0-9]+;/gi, ' ');
+                        cleanText = cleanText.replace(/https?:\/\/[^\s]+/g, '');
+                        cleanText = cleanText.replace(/@[a-zA-Z0-9_@.]+/g, '').trim();
 
-        count++;
-        // (목록 출력 로직...)
-    }
-});
+                        // 6. 중복 내용 및 최소 글자수 체크
+                        const strictText = cleanText.replace(/\s+/g, '');
+                        if (cleanText.length < minLength || processedContents.has(strictText)) return;
+                        processedContents.add(strictText);
 
-                        // 리스트 생성
+                        count++;
+
+                        // 목록 생성
                         const itemDiv = document.createElement('div');
                         itemDiv.className = 'toot-item';
-                        itemDiv.innerHTML = `<div class="toot-meta">글자수: ${text.length} | 공개범위: ${obj.visibility || 'unknown'}</div><div>${text}</div>`;
+                        itemDiv.innerHTML = `<div class="toot-meta">글자수: ${cleanText.length} | 공개범위: ${obj.visibility || '공공'}</div><div>${cleanText}</div>`;
                         display.appendChild(itemDiv);
                     }
                 });
@@ -151,6 +145,7 @@ data.orderedItems.forEach(item => {
 
             } catch (err) {
                 alert("분석 중 오류 발생: " + err.message);
+                console.error(err);
             }
         };
         reader.readAsText(fileInput.files[0]);
