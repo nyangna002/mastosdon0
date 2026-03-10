@@ -84,82 +84,87 @@
         container.appendChild(div);
     }
 
-    function calculateToots() {
-        const fileInput = document.getElementById('fileInput');
-        const minLength = parseInt(document.getElementById('minLength').value) || 0;
-        const useExcludeUser = document.getElementById('useExcludeUser').checked;
-        const excludeNormalToots = document.getElementById('excludeNormalToots').checked;
-        
-        // 제외할 URL 리스트 수집
-        const excludeUrls = Array.from(document.querySelectorAll('.excludeUrl'))
-                                .map(input => input.value.trim())
-                                .filter(val => val !== "");
-
-        const resultDiv = document.getElementById('result');
-        const finalCountSpan = document.getElementById('finalCount');
-
-        if (!fileInput.files[0]) {
-            alert("파일을 선택해 주세요!");
-            return;
-        }
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const data = JSON.parse(e.target.result);
-                let count = 0;
-data.orderedItems.forEach(item => {
-    // 1. 중복 카운트 방지 (이미 처리한 ID는 건너뜀)
-    const processedIds = new Set();
+ function calculateToots() {
+    const fileInput = document.getElementById('fileInput');
+    const minLength = parseInt(document.getElementById('minLength').value) || 0;
+    const useExcludeUser = document.getElementById('useExcludeUser').checked;
+    const excludeNormalToots = document.getElementById('excludeNormalToots').checked;
     
-    // Create 타입이면서 Object가 제대로 있는 경우만
-    if (item.type === 'Create' && item.object && typeof item.object === 'object') {
-        const obj = item.object;
-        const id = obj.id; // 툿의 고유 주소
+    const excludeUrls = Array.from(document.querySelectorAll('.excludeUrl'))
+                            .map(input => input.value.trim())
+                            .filter(val => val !== "");
 
-        if (processedIds.has(id)) return; // 이미 센 ID면 패스
-        processedIds.add(id);
+    const resultDiv = document.getElementById('result');
+    const finalCountSpan = document.getElementById('finalCount');
 
-        const content = obj.content || "";
-        const tags = obj.tag || [];
-        const mentions = tags.filter(t => t.type === 'Mention');
-        const isMention = mentions.length > 0;
-
-        // [옵션] 일반 툿 제외
-        if (excludeNormalToots && !isMention) return;
-
-        // [옵션] 특정 사용자 제외
-        if (useExcludeUser && excludeUrls.length > 0) {
-            const hasExcluded = mentions.some(m => excludeUrls.includes(m.href)) || 
-                              excludeUrls.some(url => content.includes(url));
-            if (hasExcluded) return;
-        }
-
-        // [글자수 계산] 아주 엄격하게!
-        let tempText = content.replace(/<span class="h-card">.*?<\/span>/g, ''); // 멘션 태그 삭제
-        tempText = tempText.replace(/<[^>]+?>/g, ''); // HTML 태그 삭제
-        tempText = tempText.replace(/&[a-z0-9]+;/gi, ' '); // HTML 엔티티 삭제
-        tempText = tempText.replace(/https?:\/\/[^\s]+/g, ''); // 링크 주소 삭제
-        tempText = tempText.replace(/@[a-zA-Z0-9_@.]+/g, ''); // 남은 아이디 패턴 삭제
-        
-        // 최종: 띄어쓰기 포함해서 글자수를 잽니다. (원하시면 .replace(/\s+/g, '') 추가해서 공백 뺄 수 있음)
-        const cleanText = tempText.trim();
-
-        if (cleanText.length >= minLength) {
-            count++;
-        }
+    if (!fileInput.files[0]) {
+        alert("파일을 선택해 주세요!");
+        return;
     }
-});
 
-                resultDiv.style.display = 'block';
-                finalCountSpan.innerText = count.toLocaleString() + " 개";
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            let count = 0;
+            // 중복 체크를 위한 Set (고유 ID 저장)
+            const processedIds = new Set();
 
-            } catch (err) {
-                alert("파일 읽기 오류: " + err.message);
-            }
-        };
-        reader.readAsText(fileInput.files[0]);
-    }
+            if (!data.orderedItems) return;
+
+            // 아카이브는 보통 최신순으로 정렬되어 있습니다.
+            data.orderedItems.forEach(item => {
+                // Create(생성) 활동만 계산하고 Update(수정)는 무시합니다. 
+                // (수정된 글도 결국 최초 Create 시점의 데이터가 아카이브에 존재함)
+                if (item.type === 'Create' && item.object && typeof item.object === 'object') {
+                    const obj = item.object;
+                    
+                    // 1. 고유 ID(URL) 추출 및 중복 검사
+                    // 마스토돈 툿은 고유의 atomId나 id(URL)를 가집니다.
+                    const tootId = obj.id;
+                    if (processedIds.has(tootId)) return; 
+                    processedIds.add(tootId);
+
+                    // 2. 내용 확인
+                    const content = obj.content || "";
+                    const tags = obj.tag || [];
+                    const mentions = tags.filter(t => t.type === 'Mention');
+                    const isMention = mentions.length > 0;
+
+                    // [조건] 일반 툿 제외
+                    if (excludeNormalToots && !isMention) return;
+
+                    // [조건] 특정 사용자 제외
+                    if (useExcludeUser && excludeUrls.length > 0) {
+                        const hasExcluded = mentions.some(m => excludeUrls.includes(m.href)) || 
+                                          excludeUrls.some(url => content.includes(url));
+                        if (hasExcluded) return;
+                    }
+
+                    // [글자수 계산] 태그 및 아이디 완전 제외
+                    let tempText = content.replace(/<span class="h-card">.*?<\/span>/g, '');
+                    tempText = tempText.replace(/<[^>]+?>/g, '');
+                    tempText = tempText.replace(/&[a-z0-9]+;/gi, ' ');
+                    tempText = tempText.replace(/https?:\/\/[^\s]+/g, '');
+                    tempText = tempText.replace(/@[a-zA-Z0-9_@.]+/g, '');
+                    
+                    const cleanText = tempText.trim();
+
+                    if (cleanText.length >= minLength) {
+                        count++;
+                    }
+                }
+            });
+
+            resultDiv.style.display = 'block';
+            finalCountSpan.innerText = count.toLocaleString() + " 개";
+
+        } catch (err) {
+            alert("파일 읽기 오류가 발생했습니다.");
+        }
+    };
+    reader.readAsText(fileInput.files[0]);
+}
 </script>
 
 </body>
