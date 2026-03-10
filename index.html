@@ -26,11 +26,11 @@
 <body>
 
 <div class="card">
-    <h1>마스토돈 툿 계산기</h1>
+    <h1>🐘 마스토돈 툿 계산기</h1>
 
     <div class="setting-item">
         <label>최소 글자 수 (n자 이상)</label>
-        <input type="number" id="minLength" value="30">
+        <input type="number" id="minLength" value="1">
     </div>
 
     <div class="setting-item">
@@ -93,6 +93,7 @@
                 if (!data.orderedItems) throw new Error("outbox.json 형식이 올바르지 않습니다.");
 
                 data.orderedItems.forEach(item => {
+                    // Create 타입의 Note 객체만 확인
                     if (item.type === 'Create' && item.object && typeof item.object === 'object') {
                         const obj = item.object;
 
@@ -100,42 +101,51 @@
                         if (processedIds.has(obj.id)) return;
                         processedIds.add(obj.id);
 
-                        // 2. DM(개인 멘션) 제외 로직 (visibility가 direct이면 무조건 제외)
-                        if (excludeDM && obj.visibility === 'direct') return;
+                        // 2. [강화된 DM 제외 로직]
+                        if (excludeDM) {
+                            // (A) 명시적인 visibility가 direct인 경우
+                            if (obj.visibility === 'direct') return;
+
+                            // (B) 전송 대상(to, cc)에 followers나 Public 주소가 없는 경우 (개인 멘션)
+                            const recipients = [...(item.to || []), ...(item.cc || [])].join(' ');
+                            if (!recipients.includes('followers') && !recipients.includes('Public')) {
+                                return;
+                            }
+                        }
 
                         const content = obj.content || "";
                         const tags = obj.tag || [];
                         const mentions = tags.filter(t => t.type === 'Mention');
                         const isMention = mentions.length > 0;
 
-                        // 3. 일반 툿(멘션 없음) 필터
+                        // 3. 일반 툿 필터
                         if (excludeNormal && !isMention) return;
 
-                        // 4. 특정 사용자 필터
+                        // 4. 특정 사용자 제외 필터
                         if (useExcludeUser && excludeUrls.length > 0) {
                             const hasExcluded = mentions.some(m => excludeUrls.includes(m.href)) || 
                                               excludeUrls.some(url => content.includes(url));
                             if (hasExcluded) return;
                         }
 
-                        // 5. 글자수 계산 (아이디/태그 제외)
+                        // 5. 글자수 계산용 텍스트 정제
                         let cleanText = content.replace(/<span class="h-card">.*?<\/span>/g, '');
                         cleanText = cleanText.replace(/<[^>]+?>/g, '');
                         cleanText = cleanText.replace(/&[a-z0-9]+;/gi, ' ');
                         cleanText = cleanText.replace(/https?:\/\/[^\s]+/g, '');
                         cleanText = cleanText.replace(/@[a-zA-Z0-9_@.]+/g, '').trim();
 
-                        // 6. 중복 내용 및 최소 글자수 체크
+                        // 6. 중복 내용 방지 및 최소 글자수 체크
                         const strictText = cleanText.replace(/\s+/g, '');
                         if (cleanText.length < minLength || processedContents.has(strictText)) return;
                         processedContents.add(strictText);
 
                         count++;
 
-                        // 목록 생성
+                        // 결과 목록 생성
                         const itemDiv = document.createElement('div');
                         itemDiv.className = 'toot-item';
-                        itemDiv.innerHTML = `<div class="toot-meta">글자수: ${cleanText.length} | 공개범위: ${obj.visibility || '공공'}</div><div>${cleanText}</div>`;
+                        itemDiv.innerHTML = `<div class="toot-meta">글자수: ${cleanText.length} | ID: ${obj.id.split('/').pop()}</div><div>${cleanText}</div>`;
                         display.appendChild(itemDiv);
                     }
                 });
