@@ -2,170 +2,114 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>마스토돈 툿수 계산기</title>
+    <title>마스토돈 아카이브 툿수 계산기</title>
     <style>
-        body { font-family: 'Pretendard', sans-serif; background-color: #f4f7f9; color: #333; line-height: 1.6; max-width: 700px; margin: 50px auto; padding: 20px; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h1 { font-size: 1.5rem; margin-bottom: 20px; color: #2d3748; text-align: center; }
-        .field { margin-bottom: 25px; padding-bottom: 10px; border-bottom: 1px solid #edf2f7; }
-        label { display: block; font-weight: bold; margin-bottom: 8px; font-size: 0.95rem; }
-        input[type="text"], input[type="number"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box; }
-        
-        /* 다중 입력 스타일 */
-        .exclude-item { display: flex; gap: 8px; margin-bottom: 8px; }
-        .btn-add { background-color: #48bb78; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; margin-bottom: 10px; }
-        .btn-remove { background-color: #f56565; color: white; border: none; padding: 0 12px; border-radius: 6px; cursor: pointer; }
-        
-        .checkbox-group { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: bold; }
-        .checkbox-group input { width: 18px; height: 18px; }
-        
-        button#calc-btn { width: 100%; padding: 15px; background-color: #5a67d8; color: white; border: none; border-radius: 8px; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; margin-top: 10px; }
-        button#calc-btn:hover { background-color: #4c51bf; }
-        
-        #result { margin-top: 30px; padding: 20px; border-radius: 12px; background-color: #edf2f7; text-align: center; display: none; border: 2px solid #5a67d8; }
-        .count-num { font-size: 2.5rem; color: #5a67d8; font-weight: 900; }
-        .info-text { font-size: 0.85rem; color: #718096; margin-top: 5px; }
+        body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; }
+        .card { border: 1px solid #ddd; padding: 20px; border-radius: 10px; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .field { margin-bottom: 15px; }
+        input, button { padding: 10px; width: 100%; box-sizing: border-box; margin-top: 5px; }
+        button { background: #5a67d8; color: white; border: none; font-weight: bold; cursor: pointer; }
+        #result-area { margin-top: 20px; display: none; }
+        .count-display { font-size: 1.5rem; font-weight: bold; color: #5a67d8; text-align: center; margin-bottom: 20px; }
+        .toot-list { max-height: 400px; overflow-y: auto; border: 1px solid #eee; padding: 10px; background: #f9f9f9; font-size: 0.85rem; }
+        .toot-item { border-bottom: 1px solid #ddd; padding: 10px 0; }
+        .toot-item:last-child { border-bottom: none; }
+        .tag { display: inline-block; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; margin-right: 5px; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h1>마스토돈 아이디 미포함 글자수 툿수 계산기 </h1>
-
+    <h2>툿수 계산기</h2>
+    
     <div class="field">
-        <label for="minLength">최소 글자 수 설정 (n자 이상)</label>
-        <input type="number" id="minLength" value="30" min="0">
+        <label>최소 글자 수 (n자):</label>
+        <input type="number" id="minLength" value="30">
     </div>
 
     <div class="field">
-        <label class="checkbox-group">
-            <input type="checkbox" id="useExcludeUser"> 특정 사용자(봇 등) 언급 시 제외
-        </label>
-        <div id="excludeList" style="margin-top:10px;">
-            <div class="exclude-item">
-                <input type="text" class="excludeUrl" placeholder="예: https://planet.moe/@">
-            </div>
-        </div>
-        <button class="btn-add" onclick="addExcludeField()">+ 인원 추가</button>
-        <p class="info-text">* 위 목록 중 한 명이라도 포함된 툿은 제외됩니다.</p>
+        <label>제외할 사용자 URL (선택):</label>
+        <input type="text" id="excludeUrl" placeholder="https://planet.moe/@">
     </div>
 
     <div class="field">
-        <label class="checkbox-group">
-            <input type="checkbox" id="excludeNormalToots"> 멘션 없는 '일반 툿'은 제외
-        </label>
-        <p class="info-text">* 체크 시, 누군가를 태그(@)한 툿만 계산합니다.</p>
-    </div>
-
-    <div class="field">
-        <label for="fileInput">outbox.json 파일 선택</label>
         <input type="file" id="fileInput" accept=".json">
     </div>
 
-    <button id="calc-btn" onclick="calculateToots()">툿수 계산하기</button>
+    <button onclick="analyzeToots()">분석 및 목록 보기</button>
 
-    <div id="result">
-        <div id="resultText" style="font-weight: bold;">분석된 툿 개수</div>
-        <div class="count-num" id="finalCount">0</div>
+    <div id="result-area">
+        <div class="count-display">분석 결과: <span id="finalCount">0</span>개</div>
+        <p><strong>카운트된 툿 목록 (검증용):</strong></p>
+        <div id="tootList" class="toot-list"></div>
     </div>
 </div>
 
 <script>
-    // 입력 칸 추가 함수
-    function addExcludeField() {
-        const container = document.getElementById('excludeList');
-        const div = document.createElement('div');
-        div.className = 'exclude-item';
-        div.innerHTML = `
-            <input type="text" class="excludeUrl" placeholder="https://주소...">
-            <button class="btn-remove" onclick="this.parentElement.remove()">✕</button>
-        `;
-        container.appendChild(div);
-    }
+    function analyzeToots() {
+        const fileInput = document.getElementById('fileInput');
+        const minLength = parseInt(document.getElementById('minLength').value) || 0;
+        const excludeUrl = document.getElementById('excludeUrl').value.trim();
+        
+        if (!fileInput.files[0]) return alert("파일을 선택하세요!");
 
- function calculateToots() {
-    const fileInput = document.getElementById('fileInput');
-    const minLength = parseInt(document.getElementById('minLength').value) || 0;
-    const useExcludeUser = document.getElementById('useExcludeUser').checked;
-    const excludeNormalToots = document.getElementById('excludeNormalToots').checked;
-    
-    const excludeUrls = Array.from(document.querySelectorAll('.excludeUrl'))
-                            .map(input => input.value.trim())
-                            .filter(val => val !== "");
-
-    const resultDiv = document.getElementById('result');
-    const finalCountSpan = document.getElementById('finalCount');
-
-    if (!fileInput.files[0]) {
-        alert("파일을 선택해 주세요!");
-        return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
+        const reader = new FileReader();
+        reader.onload = function(e) {
             const data = JSON.parse(e.target.result);
+            const tootListDiv = document.getElementById('tootList');
+            tootListDiv.innerHTML = '';
+            
             let count = 0;
-            // 중복 체크를 위한 Set (고유 ID 저장)
-            const processedIds = new Set();
+            const seenContents = new Set(); // 본문 내용 중복 체크
+            const seenIds = new Set();      // ID 중복 체크
 
-            if (!data.orderedItems) return;
-
-            // 아카이브는 보통 최신순으로 정렬되어 있습니다.
             data.orderedItems.forEach(item => {
-                // Create(생성) 활동만 계산하고 Update(수정)는 무시합니다. 
-                // (수정된 글도 결국 최초 Create 시점의 데이터가 아카이브에 존재함)
+                // 오직 Create 활동만
                 if (item.type === 'Create' && item.object && typeof item.object === 'object') {
                     const obj = item.object;
-                    
-                    // 1. 고유 ID(URL) 추출 및 중복 검사
-                    // 마스토돈 툿은 고유의 atomId나 id(URL)를 가집니다.
-                    const tootId = obj.id;
-                    if (processedIds.has(tootId)) return; 
-                    processedIds.add(tootId);
-
-                    // 2. 내용 확인
                     const content = obj.content || "";
-                    const tags = obj.tag || [];
-                    const mentions = tags.filter(t => t.type === 'Mention');
-                    const isMention = mentions.length > 0;
-
-                    // [조건] 일반 툿 제외
-                    if (excludeNormalToots && !isMention) return;
-
-                    // [조건] 특정 사용자 제외
-                    if (useExcludeUser && excludeUrls.length > 0) {
-                        const hasExcluded = mentions.some(m => excludeUrls.includes(m.href)) || 
-                                          excludeUrls.some(url => content.includes(url));
-                        if (hasExcluded) return;
-                    }
-
-                    // [글자수 계산] 태그 및 아이디 완전 제외
-                    let tempText = content.replace(/<span class="h-card">.*?<\/span>/g, '');
-                    tempText = tempText.replace(/<[^>]+?>/g, '');
-                    tempText = tempText.replace(/&[a-z0-9]+;/gi, ' ');
-                    tempText = tempText.replace(/https?:\/\/[^\s]+/g, '');
-                    tempText = tempText.replace(/@[a-zA-Z0-9_@.]+/g, '');
                     
-                    const cleanText = tempText.trim();
+                    // 1. ID 중복 제거
+                    if (seenIds.has(obj.id)) return;
+                    seenIds.add(obj.id);
 
-                    if (cleanText.length >= minLength) {
+                    // 2. 특정 사용자 제외
+                    const tags = obj.tag || [];
+                    const hasExcluded = tags.some(t => t.href === excludeUrl) || content.includes(excludeUrl);
+                    if (excludeUrl && hasExcluded) return;
+
+                    // 3. 순수 텍스트 추출 (글자수용)
+                    let textForCount = content.replace(/<span class="h-card">.*?<\/span>/g, '');
+                    textForCount = textForCount.replace(/<[^>]+?>/g, '');
+                    textForCount = textForCount.replace(/&[a-z0-9]+;/gi, ' ');
+                    textForCount = textForCount.replace(/https?:\/\/[^\s]+/g, '');
+                    textForCount = textForCount.replace(/@[a-zA-Z0-9_@.]+/g, '').trim();
+
+                    // 4. 본문 내용 중복 제거 (수정된 글이 Create로 또 들어온 경우 대비)
+                    // 공백까지 다 지운 텍스트를 기준으로 중복을 체크합니다.
+                    const strictText = textForCount.replace(/\s+/g, '');
+                    if (strictText.length === 0 || seenContents.has(strictText)) return;
+                    
+                    // 5. 글자수 필터링
+                    if (textForCount.length >= minLength) {
+                        seenContents.add(strictText);
                         count++;
+
+                        // 목록에 추가
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'toot-item';
+                        itemDiv.innerHTML = `<div>${textForCount.substring(0, 100)}${textForCount.length > 100 ? '...' : ''}</div>
+                                             <div style="color: #999; font-size: 0.7rem;">(글자수: ${textForCount.length})</div>`;
+                        tootListDiv.appendChild(itemDiv);
                     }
                 }
             });
 
-            resultDiv.style.display = 'block';
-            finalCountSpan.innerText = count.toLocaleString() + " 개";
-
-        } catch (err) {
-            alert("파일 읽기 오류가 발생했습니다.");
-        }
-    };
-    reader.readAsText(fileInput.files[0]);
-}
+            document.getElementById('result-area').style.display = 'block';
+            document.getElementById('finalCount').innerText = count;
+        };
+        reader.readAsText(fileInput.files[0]);
+    }
 </script>
-
 </body>
 </html>
