@@ -90,44 +90,53 @@
                 const processedIds = new Set();
                 const processedContents = new Set();
 
-                data.orderedItems.forEach(item => {
-                    if (item.type === 'Create' && item.object && typeof item.object === 'object') {
-                        const obj = item.object;
+data.orderedItems.forEach(item => {
+    // 1. 본인이 생성(Create)한 노트(Note)만 필터링
+    if (item.type === 'Create' && item.object && typeof item.object === 'object') {
+        const obj = item.object;
 
-                        // 1. 중복 ID 제거
-                        if (processedIds.has(obj.id)) return;
-                        processedIds.add(obj.id);
+        // --- [핵심] 개인 멘션(DM) 제외 로직 ---
+        // 마스토돈의 DM은 visibility가 'direct'입니다. 
+        // 이 한 줄이 827개에서 개인 대화를 싹 걷어내 줄 거예요.
+        if (obj.visibility === 'direct') return; 
+        // ------------------------------------
 
-                        // 2. DM 필터링
-                        if (excludeDM && (obj.visibility === 'direct' || obj.directMessage === true)) return;
+        // 중복 ID 방지
+        const tootId = obj.id;
+        if (processedIds.has(tootId)) return; 
+        processedIds.add(tootId);
 
-                        const content = obj.content || "";
-                        const tags = obj.tag || [];
-                        const mentions = tags.filter(t => t.type === 'Mention');
-                        const isMention = mentions.length > 0;
+        const content = obj.content || "";
+        const tags = obj.tag || [];
+        const mentions = tags.filter(t => t.type === 'Mention');
+        const isMention = mentions.length > 0;
 
-                        // 3. 일반 툿 필터링
-                        if (excludeNormal && !isMention) return;
+        // [옵션] 일반 툿(멘션 없는 글) 제외
+        if (excludeNormal && !isMention) return;
 
-                        // 4. 특정 사용자 필터링
-                        if (useExcludeUser && excludeUrls.length > 0) {
-                            const isExcluded = mentions.some(m => excludeUrls.includes(m.href)) || excludeUrls.some(u => content.includes(u));
-                            if (isExcluded) return;
-                        }
+        // [옵션] 특정 사용자 제외 (COSMIC_BOT 등)
+        if (useExcludeUser && excludeUrls.length > 0) {
+            const hasExcluded = mentions.some(m => excludeUrls.includes(m.href)) || 
+                              excludeUrls.some(url => content.includes(url));
+            if (hasExcluded) return;
+        }
 
-                        // 5. 글자수 계산 (아이디/태그 제외)
-                        let text = content.replace(/<span class="h-card">.*?<\/span>/g, '');
-                        text = text.replace(/<[^>]+?>/g, '');
-                        text = text.replace(/&[a-z0-9]+;/gi, ' ');
-                        text = text.replace(/https?:\/\/[^\s]+/g, '');
-                        text = text.replace(/@[a-zA-Z0-9_@.]+/g, '').trim();
+        // [글자수 계산] 아이디 제외 순수 본문
+        let text = content.replace(/<span class="h-card">.*?<\/span>/g, '');
+        text = text.replace(/<[^>]+?>/g, '');
+        text = text.replace(/&[a-z0-9]+;/gi, ' ');
+        text = text.replace(/https?:\/\/[^\s]+/g, '');
+        text = text.replace(/@[a-zA-Z0-9_@.]+/g, '').trim();
 
-                        // 6. 본문 내용 중복 제거 (수정본 방지)
-                        const strictText = text.replace(/\s+/g, '');
-                        if (strictText.length < minLength || processedContents.has(strictText)) return;
-                        processedContents.add(strictText);
+        // 수정본 중복 방지 (텍스트 내용 기준)
+        const strictText = text.replace(/\s+/g, '');
+        if (strictText.length < minLength || processedContents.has(strictText)) return;
+        processedContents.add(strictText);
 
-                        count++;
+        count++;
+        // (목록 출력 로직...)
+    }
+});
 
                         // 리스트 생성
                         const itemDiv = document.createElement('div');
