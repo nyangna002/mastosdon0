@@ -109,42 +109,41 @@
                 const data = JSON.parse(e.target.result);
                 let count = 0;
 data.orderedItems.forEach(item => {
-    // 1. 오직 본인이 '생성(Create)'한 '노트(Note)' 타입만 확인 (부스트 제외)
-    if (item.type === 'Create' && item.object && item.object.type === 'Note') {
+    // 1. 중복 카운트 방지 (이미 처리한 ID는 건너뜀)
+    const processedIds = new Set();
+    
+    // Create 타입이면서 Object가 제대로 있는 경우만
+    if (item.type === 'Create' && item.object && typeof item.object === 'object') {
         const obj = item.object;
-        
-        // 2. 비공개 멘션이나 시스템 알림 등 내용이 없는 경우 제외
-        const content = obj.content || "";
-        if (!content) return;
+        const id = obj.id; // 툿의 고유 주소
 
+        if (processedIds.has(id)) return; // 이미 센 ID면 패스
+        processedIds.add(id);
+
+        const content = obj.content || "";
         const tags = obj.tag || [];
         const mentions = tags.filter(t => t.type === 'Mention');
         const isMention = mentions.length > 0;
 
-        // [조건 1] 일반 툿 제외 옵션
+        // [옵션] 일반 툿 제외
         if (excludeNormalToots && !isMention) return;
 
-        // [조건 2] 다중 특정 사용자 제외 (봇 등)
+        // [옵션] 특정 사용자 제외
         if (useExcludeUser && excludeUrls.length > 0) {
             const hasExcluded = mentions.some(m => excludeUrls.includes(m.href)) || 
                               excludeUrls.some(url => content.includes(url));
             if (hasExcluded) return;
         }
 
-        // [조건 3] 글자 수 계산 로직 대폭 강화
-        // a. 멘션 태그 제거
-        let tempContent = content.replace(/<span class="h-card">.*?<\/span>/g, '');
-        // b. 모든 HTML 태그 제거
-        tempContent = tempContent.replace(/<[^>]+?>/g, '');
-        // c. HTML 특수문자(&nbsp;, &lt; 등) 제거
-        tempContent = tempContent.replace(/&[a-z0-9]+;/gi, ' ');
-        // d. 본문 내 @아이디 패턴 제거
-        tempContent = tempContent.replace(/@[a-zA-Z0-9_@.]+/g, '');
-        // e. URL 링크 텍스트 제거 (링크 주소가 글자 수 잡아먹는 것 방지)
-        tempContent = tempContent.replace(/https?:\/\/[^\s]+/g, '');
+        // [글자수 계산] 아주 엄격하게!
+        let tempText = content.replace(/<span class="h-card">.*?<\/span>/g, ''); // 멘션 태그 삭제
+        tempText = tempText.replace(/<[^>]+?>/g, ''); // HTML 태그 삭제
+        tempText = tempText.replace(/&[a-z0-9]+;/gi, ' '); // HTML 엔티티 삭제
+        tempText = tempText.replace(/https?:\/\/[^\s]+/g, ''); // 링크 주소 삭제
+        tempText = tempText.replace(/@[a-zA-Z0-9_@.]+/g, ''); // 남은 아이디 패턴 삭제
         
-        // f. 최종: 공백과 줄바꿈을 제거한 순수 텍스트만 추출
-        const cleanText = tempContent.replace(/\s+/g, '').trim();
+        // 최종: 띄어쓰기 포함해서 글자수를 잽니다. (원하시면 .replace(/\s+/g, '') 추가해서 공백 뺄 수 있음)
+        const cleanText = tempText.trim();
 
         if (cleanText.length >= minLength) {
             count++;
