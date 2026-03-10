@@ -108,36 +108,49 @@
             try {
                 const data = JSON.parse(e.target.result);
                 let count = 0;
+data.orderedItems.forEach(item => {
+    // 1. 오직 본인이 '생성(Create)'한 '노트(Note)' 타입만 확인 (부스트 제외)
+    if (item.type === 'Create' && item.object && item.object.type === 'Note') {
+        const obj = item.object;
+        
+        // 2. 비공개 멘션이나 시스템 알림 등 내용이 없는 경우 제외
+        const content = obj.content || "";
+        if (!content) return;
 
-                data.orderedItems.forEach(item => {
-                    if (item.type === 'Create' && item.object && item.object.type === 'Note') {
-                        const obj = item.object;
-                        const content = obj.content || "";
-                        const tags = obj.tag || [];
-                        
-                        const mentions = tags.filter(t => t.type === 'Mention');
-                        const isMention = mentions.length > 0;
+        const tags = obj.tag || [];
+        const mentions = tags.filter(t => t.type === 'Mention');
+        const isMention = mentions.length > 0;
 
-                        // [조건 1] 일반 툿 제외
-                        if (excludeNormalToots && !isMention) return;
+        // [조건 1] 일반 툿 제외 옵션
+        if (excludeNormalToots && !isMention) return;
 
-                        // [조건 2] 다중 특정 사용자 제외
-                        if (useExcludeUser && excludeUrls.length > 0) {
-                            const hasExcluded = mentions.some(m => excludeUrls.includes(m.href)) || 
-                                              excludeUrls.some(url => content.includes(url));
-                            if (hasExcluded) return;
-                        }
+        // [조건 2] 다중 특정 사용자 제외 (봇 등)
+        if (useExcludeUser && excludeUrls.length > 0) {
+            const hasExcluded = mentions.some(m => excludeUrls.includes(m.href)) || 
+                              excludeUrls.some(url => content.includes(url));
+            if (hasExcluded) return;
+        }
 
-                        // [계산] 순수 본문 글자수 측정 (멘션 아이디 제외)
-                        let pureContent = content.replace(/<span class="h-card">.*?<\/span>/g, '');
-                        let cleanText = pureContent.replace(/<[^>]+?>/g, '').trim();
-                        cleanText = cleanText.replace(/@[a-zA-Z0-9_@.]+/g, '').trim();
+        // [조건 3] 글자 수 계산 로직 대폭 강화
+        // a. 멘션 태그 제거
+        let tempContent = content.replace(/<span class="h-card">.*?<\/span>/g, '');
+        // b. 모든 HTML 태그 제거
+        tempContent = tempContent.replace(/<[^>]+?>/g, '');
+        // c. HTML 특수문자(&nbsp;, &lt; 등) 제거
+        tempContent = tempContent.replace(/&[a-z0-9]+;/gi, ' ');
+        // d. 본문 내 @아이디 패턴 제거
+        tempContent = tempContent.replace(/@[a-zA-Z0-9_@.]+/g, '');
+        // e. URL 링크 텍스트 제거 (링크 주소가 글자 수 잡아먹는 것 방지)
+        tempContent = tempContent.replace(/https?:\/\/[^\s]+/g, '');
+        
+        // f. 최종: 공백과 줄바꿈을 제거한 순수 텍스트만 추출
+        const cleanText = tempContent.replace(/\s+/g, '').trim();
 
-                        if (cleanText.length >= minLength) {
-                            count++;
-                        }
-                    }
-                });
+        if (cleanText.length >= minLength) {
+            count++;
+        }
+    }
+});
 
                 resultDiv.style.display = 'block';
                 finalCountSpan.innerText = count.toLocaleString() + " 개";
